@@ -27,6 +27,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 object ImageEnhancer {
+    // KMK --> Keep only pages within this window behind the visible target; older preloads are pruned.
+    private const val STALE_PRELOAD_PRUNE_BEHIND = 3
+    // KMK <--
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val pendingRequests = ConcurrentHashMap<String, Int>()
 
@@ -313,7 +317,20 @@ object ImageEnhancer {
         targetPageVariant = pageVariant
         targetSecondaryPageIndex = secondaryPageIndex ?: -1
         targetSecondaryPageVariant = if (secondaryPageIndex != null) secondaryPageVariant else ""
-        preemptActiveRequestIfBehindTarget()
+        // KMK --> Drop stale preloaded pages that have already been scrolled past.
+        queue.removeIf { req ->
+            if (req.pageIndex < targetPageIndex - STALE_PRELOAD_PRUNE_BEHIND) {
+                pendingRequests.remove(req.key, req.generation)
+                logcat(LogPriority.DEBUG) {
+                    "ImageEnhancer: Pruned stale preload page ${req.pageIndex}/${req.pageVariant} (target=$targetPageIndex)"
+                }
+                true
+            } else {
+                false
+            }
+        }
+        // KMK <--
+        preemptActiveRequestIfNotTarget()
         val snapshot = mutableListOf<EnhanceRequest>()
         queue.drainTo(snapshot)
         if (snapshot.isNotEmpty()) {
@@ -388,6 +405,18 @@ object ImageEnhancer {
     private suspend fun processRequest(req: EnhanceRequest) {
         try {
             if (req.generation != generation.get()) return
+            // KMK --> Drop stale requests that have already been scrolled past so they don't
+            // waste GPU time ahead of the currently visible page.
+            if (
+                req.pageIndex < targetPageIndex &&
+                !isFocusedTarget(req.pageIndex, req.pageVariant)
+            ) {
+                logcat(LogPriority.DEBUG) {
+                    "ImageEnhancer: Dropping stale page ${req.pageIndex}/${req.pageVariant} (target=$targetPageIndex)"
+                }
+                return
+            }
+            // KMK <--
             activeMangaId = req.mangaId
             activeChapterId = req.chapterId
             activePageIndex = req.pageIndex
@@ -460,10 +489,18 @@ object ImageEnhancer {
         }
     }
 
-    private fun preemptActiveRequestIfBehindTarget() {
-        if (activePageIndex >= 0 && activePageIndex < targetPageIndex) {
-            preemptActiveRequest("active page is behind visible target")
+    private fun preemptActiveRequestIfNotTarget() {
+        // KMK --> Preempt any active request that is not the currently visible target so the
+        // page the user is reading gets processed as soon as possible.
+        if (
+            activePageIndex >= 0 &&
+            !isFocusedTarget(activePageIndex, activePageVariant)
+        ) {
+            // Future preload pages may be re-queued later; pages already read past are dropped.
+            val requeue = activePageIndex > targetPageIndex
+            preemptActiveRequest("active page is not the visible target", requeue = requeue)
         }
+        // KMK <--
     }
 
     private fun preemptActiveRequest(reason: String, requeue: Boolean = false) {
