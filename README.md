@@ -39,19 +39,8 @@ AI 图像增强(upscale)引擎移植自 **mihon_img_upscale**(<https://github.co
    - 设置 `ReaderPreferences`、`ColorFilterPage`、`ReaderBottomButton`(增强按钮可开关)
    - `i18n-kmk` 文案(`KMR`)
 
-### 构建方法
-```bash
-# 前置:Android SDK + JDK 17;local.properties 配置 sdk.dir
-# ncnn SDK 已随仓库放在 third_party/,无需额外下载
-
-./gradlew spotlessApply
-./gradlew spotlessCheck
-./gradlew assembleRelease   # release 已配置 debug 签名,可直接安装
-```
-
-产物在 `app/build/outputs/apk/release/`:
-- `app-universal-release.apk` — 通用包(含全部 ABI,推荐)
-- `app-arm64-v8a-release.apk` / `app-armeabi-v7a-release.apk` / `app-x86_64-release.apk` / `app-x86-release.apk`
+### 构建方法 / 更新移植
+详细的构建步骤、产物说明,以及上游(Komikku、mihon_img_upscale)更新后的重新移植方法,均见 **[`PORTING_GUIDE.md`](./PORTING_GUIDE.md)**。
 
 ---
 
@@ -261,14 +250,3 @@ The developer(s) of this application does not have any affiliation with the cont
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
-
----
-
-## Updating this fork (更新移植)
-
-当上游两个仓库有更新时,需要重新移植/合并。**完整的分步方法见 [`PORTING_GUIDE.md`](./PORTING_GUIDE.md)**,按以下场景选择:
-
-- **Komikku 上游更新** → `git fetch origin && git merge origin/master`,手动解决 `// KMK` 集成点冲突(见指南第 2 节「场景一」)。
-- **mihon_img_upscale 引擎更新** → 复制 `cpp/`、`assets/`、`third_party/ncnn`,重放本 fork 定制(见指南第 2 节「场景二」)。
-
-更新后务必按指南第 3 节「验证清单」检查:`.so` 已打包、无 QNN 库、debug 签名、增强功能可用。
