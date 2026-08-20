@@ -261,3 +261,14 @@ The developer(s) of this application does not have any affiliation with the cont
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
+
+---
+
+## Updating this fork (更新移植)
+
+当上游两个仓库有更新时,需要重新移植/合并。**完整的分步方法见 [`PORTING_GUIDE.md`](./PORTING_GUIDE.md)**,按以下场景选择:
+
+- **Komikku 上游更新** → `git fetch origin && git merge origin/master`,手动解决 `// KMK` 集成点冲突(见指南第 2 节「场景一」)。
+- **mihon_img_upscale 引擎更新** → 复制 `cpp/`、`assets/`、`third_party/ncnn`,重放本 fork 定制(见指南第 2 节「场景二」)。
+
+更新后务必按指南第 3 节「验证清单」检查:`.so` 已打包、无 QNN 库、debug 签名、增强功能可用。
