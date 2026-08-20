@@ -110,6 +110,7 @@ import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
+import eu.kanade.tachiyomi.util.waifu2x.Waifu2x
 import exh.source.isEhBasedSource
 import exh.util.defaultReaderType
 import exh.util.mangaType
@@ -152,6 +153,9 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 class ReaderActivity : BaseActivity() {
 
     companion object {
+        // KMK -->
+        private const val UI_BUSY_COOLDOWN_MS = 1_000L
+        // KMK <--
 
         fun newIntent(context: Context, mangaId: Long?, chapterId: Long?/* SY --> */, page: Int? = null/* SY <-- */): Intent {
             return Intent(context, ReaderActivity::class.java).apply {
@@ -200,6 +204,10 @@ class ReaderActivity : BaseActivity() {
 
     var isScrollingThroughPages = false
         private set
+
+    // KMK -->
+    private var uiBusyJob: kotlinx.coroutines.Job? = null
+    // KMK <--
 
     /**
      * Called when the activity is created. Initializes the presenter and configuration.
@@ -312,6 +320,27 @@ class ReaderActivity : BaseActivity() {
                 }
             }
             .launchIn(lifecycleScope)
+
+        // KMK -->
+        // Notify the native upscaler about UI interaction so it can pause heavy tile work
+        // while the user is navigating the menu.
+        viewModel.state
+            .map { it.menuVisible }
+            .distinctUntilChanged()
+            .onEach { menuVisible ->
+                if (menuVisible) {
+                    uiBusyJob?.cancel()
+                    Waifu2x.setUiBusy(true)
+                } else {
+                    onUiInteracted()
+                }
+            }
+            .launchIn(lifecycleScope)
+
+        if (readerPreferences.waifu2xEnabled().get()) {
+            Waifu2x.init(this, readerPreferences.waifu2xNoiseLevel().get())
+        }
+        // KMK <--
     }
 
     private fun ReaderActivityBinding.setComposeOverlay(): Unit = composeOverlay.setComposeContent {
@@ -521,6 +550,10 @@ class ReaderActivity : BaseActivity() {
      * Called when the activity is destroyed. Cleans up the viewer, configuration and any view.
      */
     override fun onDestroy() {
+        // KMK -->
+        uiBusyJob?.cancel()
+        Waifu2x.setUiBusy(false)
+        // KMK <--
         super.onDestroy()
         viewModel.state.value.viewer?.destroy()
         config = null
@@ -615,8 +648,29 @@ class ReaderActivity : BaseActivity() {
      */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         val handled = viewModel.state.value.viewer?.handleGenericMotionEvent(event) ?: false
+        // KMK -->
+        if (handled) onUiInteracted()
+        // KMK <--
         return handled || super.dispatchGenericMotionEvent(event)
     }
+
+    // KMK -->
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        onUiInteracted()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun onUiInteracted() {
+        Waifu2x.setUiBusy(true)
+        uiBusyJob?.cancel()
+        uiBusyJob = lifecycleScope.launch {
+            delay(UI_BUSY_COOLDOWN_MS)
+            if (!viewModel.state.value.menuVisible) {
+                Waifu2x.setUiBusy(false)
+            }
+        }
+    }
+    // KMK <--
 
     @Composable
     private fun ContentOverlay(state: ReaderViewModel.State) {
@@ -665,6 +719,9 @@ class ReaderActivity : BaseActivity() {
         val readerBottomButtons by readerPreferences.readerBottomButtons().changes().map { it.toImmutableSet() }
             .collectAsState(persistentSetOf())
         val dualPageSplitPaged by readerPreferences.dualPageSplitPaged().collectAsState()
+        // KMK -->
+        val imageEnhancementEnabled by readerPreferences.realCuganEnabled().collectAsState()
+        // KMK <--
 
         val forceHorizontalSeekbar by readerPreferences.forceHorizontalSeekbar().collectAsState()
         val landscapeVerticalSeekbar by readerPreferences.landscapeVerticalSeekbar().collectAsState()
@@ -722,6 +779,19 @@ class ReaderActivity : BaseActivity() {
                 menuToggleToast?.cancel()
                 menuToggleToast = toast(if (enabled) MR.strings.on else MR.strings.off)
             },
+            // KMK -->
+            imageEnhancementEnabled = imageEnhancementEnabled,
+            onClickImageEnhancement = {
+                val enabled = viewModel.toggleImageEnhancement()
+                menuToggleToast?.cancel()
+                menuToggleToast = toast(
+                    stringResource(
+                        KMR.strings.reader_image_enhancement_toast,
+                        stringResource(if (enabled) MR.strings.on else MR.strings.off),
+                    ),
+                )
+            },
+            // KMK <--
             onClickSettings = viewModel::openSettingsDialog,
             // SY -->
             isExhToolsVisible = state.ehUtilsVisible,

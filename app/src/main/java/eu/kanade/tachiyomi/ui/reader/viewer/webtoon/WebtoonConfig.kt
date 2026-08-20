@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
+import android.app.Application
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.ui.reader.viewer.navigation.KindlishNavigation
 import eu.kanade.tachiyomi.ui.reader.viewer.navigation.LNavigation
 import eu.kanade.tachiyomi.ui.reader.viewer.navigation.RightAndLeftNavigation
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
@@ -23,6 +25,10 @@ class WebtoonConfig(
     scope: CoroutineScope,
     readerPreferences: ReaderPreferences = Injekt.get(),
 ) : ViewerConfig(readerPreferences, scope) {
+
+    // KMK -->
+    private val appContext = Injekt.get<Application>()
+    // KMK <--
 
     var themeChangedListener: (() -> Unit)? = null
 
@@ -141,6 +147,150 @@ class WebtoonConfig(
         readerPreferences.pageTransitionsWebtoon()
             .register({ usePageTransitions = it }, { imagePropertyChangedListener?.invoke() })
         // SY <--
+
+        // KMK -->
+        // Image enhancement (upscale) settings - cancel in-flight work and refresh pages when changed.
+        readerPreferences.realCuganEnabled().changes()
+            .drop(1)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganEnabled changed")
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganModel().changes()
+            .drop(1)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganModel changed")
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realEsrganStyle().changes()
+            .drop(1)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realEsrganStyle changed")
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganNoiseLevel().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganNoiseLevel changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganScale().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganScale changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganMaxSizeWidth().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganMaxSizeWidth changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganMaxSizeHeight().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganMaxSizeHeight changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganSkipMaxSizeWidth().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganSkipMaxSizeWidth changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganSkipMaxSizeHeight().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganSkipMaxSizeHeight changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganTileSize().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganTileSize changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganPrecision().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganPrecision changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganProcessingBackend().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganProcessingBackend changed") }
+            .debounce(500)
+            .onEach {
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganFp16Arithmetic().changes()
+            .drop(1)
+            .onEach { eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("realCuganFp16Arithmetic changed") }
+            .debounce(500)
+            .onEach {
+                eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache.clear(appContext)
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganShowStatus().changes()
+            .drop(1)
+            .onEach {
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+
+        readerPreferences.realCuganPreloadSize().changes()
+            .drop(1)
+            .onEach {
+                // No need to clear cache for preload size change
+                imagePropertyChangedListener?.invoke()
+            }
+            .launchIn(scope)
+        // KMK <--
     }
 
     override var navigator: ViewerNavigation = defaultNavigation()

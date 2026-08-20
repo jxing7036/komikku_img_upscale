@@ -97,6 +97,14 @@ class WebtoonPageHolder(
      */
     fun bind(page: ReaderPage) {
         this.page = page
+        // KMK -->
+        // Set page metadata for enhancement priority tracking.
+        frame.pageIndex = page.index
+        frame.mangaId = page.chapter.chapter.manga_id ?: -1L
+        frame.chapterId = page.chapter.chapter.id ?: -1L
+        frame.readerPage = page
+        frame.enhancementVariantOverride = page.enhancementKeySuffix
+        // KMK <--
         loadJob?.cancel()
         loadJob = scope.launch { loadPageAndProcessStatus() }
         refreshLayoutParams()
@@ -210,6 +218,9 @@ class WebtoonPageHolder(
                         (viewer.config.imageCropBorders && viewer.isContinuous) ||
                             (viewer.config.continuousCropBorders && !viewer.isContinuous),
                     ),
+                    // KMK -->
+                    streamFn,
+                    // KMK <--
                 )
                 removeErrorLayout()
             }

@@ -3,6 +3,7 @@
 #.vscode
 .kotlin
 build
+app/.cxx/
 
 # IDE files
 *.iml

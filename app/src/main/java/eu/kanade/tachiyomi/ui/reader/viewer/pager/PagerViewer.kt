@@ -40,6 +40,10 @@ abstract class PagerViewer(
 
     val downloadManager: DownloadManager by injectLazy()
 
+    // KMK -->
+    val preferences: eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences by injectLazy()
+    // KMK <--
+
     val scope = MainScope()
 
     /**
@@ -113,7 +117,9 @@ abstract class PagerViewer(
         pager.isVisible = false // Don't layout the pager yet
         pager.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         pager.isFocusable = false
-        pager.offscreenPageLimit = 1
+        // KMK -->
+        pager.offscreenPageLimit = if (preferences.realCuganEnabled().get()) preferences.realCuganPreloadSize().get() else 1
+        // KMK <--
         pager.id = R.id.reader_pager
         pager.adapter = adapter
         pager.addOnPageChangeListener(pagerListener)
@@ -169,6 +175,9 @@ abstract class PagerViewer(
 
     override fun destroy() {
         super.destroy()
+        // KMK -->
+        eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("pager viewer destroyed")
+        // KMK <--
         scope.cancel()
     }
 
@@ -422,6 +431,9 @@ abstract class PagerViewer(
      */
     private fun refreshAdapter() {
         val currentItem = pager.currentItem
+        // KMK -->
+        pager.offscreenPageLimit = if (preferences.realCuganEnabled().get()) preferences.realCuganPreloadSize().get() else 1
+        // KMK <--
         adapter.refresh()
         pager.adapter = adapter
         pager.setCurrentItem(currentItem, false)

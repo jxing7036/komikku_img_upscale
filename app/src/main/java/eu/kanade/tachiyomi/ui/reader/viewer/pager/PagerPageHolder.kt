@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.databinding.ReaderErrorBinding
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.model.InsertPage
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
@@ -32,6 +33,8 @@ import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.decoder.ImageDecoder
 import tachiyomi.i18n.MR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import kotlin.math.max
 
 /**
@@ -76,7 +79,18 @@ class PagerPageHolder(
      */
     private var extraLoadJob: Job? = null
 
+    // KMK -->
+    private val readerPreferences by lazy { Injekt.get<ReaderPreferences>() }
+    // KMK <--
+
     init {
+        // KMK -->
+        // Set page index for enhancement priority tracking
+        pageIndex = page.index
+        mangaId = viewer.activity.viewModel.manga?.id ?: -1L
+        chapterId = page.chapter.chapter.id ?: -1L
+        readerPage = page
+        // KMK <--
         loadJob = scope.launch { loadPageAndProcessStatus(1) }
         // SY -->
         extraLoadJob = scope.launch { loadPageAndProcessStatus(2) }
@@ -222,6 +236,9 @@ class PagerPageHolder(
                         landscapeZoomScaleType = viewer.config.landscapeZoomScaleType,
                         // KMK <--
                     ),
+                    // KMK -->
+                    streamFn,
+                    // KMK <--
                 )
                 if (!isAnimated) {
                     pageBackground = background

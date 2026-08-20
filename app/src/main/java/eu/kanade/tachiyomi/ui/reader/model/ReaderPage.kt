@@ -25,4 +25,12 @@ open class ReaderPage(
             field = value
             if (value) shiftedPage = false
         }
+
+    // KMK -->
+    /** Raw source stream kept for image enhancement (upscale) even when a page cache exists. */
+    var enhancementStream: (() -> InputStream)? = null
+
+    /** Variant key for the enhancement cache (e.g. wide-page split halves). */
+    var enhancementKeySuffix: String = ""
+    // KMK <--
 }

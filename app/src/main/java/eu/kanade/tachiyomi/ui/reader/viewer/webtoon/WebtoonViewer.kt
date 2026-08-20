@@ -252,6 +252,9 @@ class WebtoonViewer(
      */
     override fun destroy() {
         super.destroy()
+        // KMK -->
+        eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.cancelAll("webtoon viewer destroyed")
+        // KMK <--
         scope.cancel()
     }
 
@@ -263,6 +266,10 @@ class WebtoonViewer(
         val pages = page.chapter.pages ?: return
         logcat { "onPageSelected: ${page.number}/${pages.size}" }
         activity.onPageSelected(page)
+
+        // KMK -->
+        eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer.reprioritizeAround(page.index, page.enhancementKeySuffix)
+        // KMK <--
 
         // Preload next chapter once we're within the last 5 pages of the current chapter
         val inPreloadRange = pages.size - page.number < 5

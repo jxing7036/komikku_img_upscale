@@ -2,6 +2,9 @@ import mihon.buildlogic.Config
 import mihon.buildlogic.getBuildTime
 import mihon.buildlogic.getCommitCount
 import mihon.buildlogic.getGitSha
+import org.gradle.api.tasks.Sync
+import java.io.File
+import java.util.Properties
 
 plugins {
     id("mihon.android.application")
@@ -22,6 +25,94 @@ if (Config.includeTelemetry) {
 
 shortcutHelper.setFilePath("./shortcuts.xml")
 
+// KMK -->
+// Image upscaling (waifu2x / Real-CUGAN / Real-ESRGAN / W2xEX / SPAN) via ncnn.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+
+val bundledNcnnSdkDir = rootProject.file("third_party/ncnn-20260113-android-vulkan")
+
+val ncnnSdkDir = providers.gradleProperty("ncnnSdkDir").orNull
+    ?: localProperties.getProperty("ncnn.sdk.dir")
+    ?: System.getenv("NCNN_SDK_DIR")
+    ?: bundledNcnnSdkDir.takeIf { it.exists() }?.absolutePath
+
+val qnnSdkDir = providers.gradleProperty("qnnSdkDir").orNull
+    ?: localProperties.getProperty("qnn.sdk.dir")
+    ?: System.getenv("QNN_SDK_ROOT")
+
+val qnnHtpArchs = (
+    providers.gradleProperty("qnnHtpArchs").orNull
+        ?: localProperties.getProperty("qnn.htp.archs")
+        ?: localProperties.getProperty("qnn.htp.arch")
+        ?: "69,73,75,79,81"
+    ).split(',').map(String::trim).filter(String::isNotEmpty).distinct()
+
+val qnnContextDir = providers.gradleProperty("qnnContextDir").orNull
+    ?: localProperties.getProperty("qnn.context.dir")
+    ?: System.getenv("QNN_CONTEXT_DIR")
+
+val qnnSdkRoot = qnnSdkDir?.takeIf { it.isNotBlank() }?.let(rootProject::file)
+val qnnContextRoot = qnnContextDir?.takeIf { it.isNotBlank() }?.let(rootProject::file)
+val generatedQnnAssetsDir = layout.buildDirectory.dir("generated/qnnAssets")
+val qnnSocModels = listOf("SM8475", "SM8550", "SM8650", "SM8750", "SM8850")
+val qnnModelNames = listOf(
+    "realesrgan-animevideov3-x2",
+    "realesrgan-animevideov3-x2-int8",
+    "realesrgan-general-x4v3-x2",
+    "realesrgan-general-x4v3-x2-int8",
+    "realcugan-se-x2-no-denoise",
+    "realcugan-se-x2-denoise1x",
+    "realcugan-se-x2-denoise2x",
+    "realcugan-se-x2-denoise3x",
+    "realcugan-se-x2-conservative",
+    "realcugan-se-x2-no-denoise-int8",
+    "realcugan-se-x2-denoise1x-int8",
+    "realcugan-se-x2-denoise2x-int8",
+    "realcugan-se-x2-denoise3x-int8",
+    "realcugan-se-x2-conservative-int8",
+    "realcugan-pro-x2-no-denoise",
+    "realcugan-pro-x2-denoise3x",
+    "realcugan-pro-x2-conservative",
+    "realcugan-pro-x2-no-denoise-int8",
+    "realcugan-pro-x2-denoise3x-int8",
+    "realcugan-pro-x2-conservative-int8",
+    "realcugan-pro-x3-no-denoise",
+    "realcugan-pro-x3-denoise3x",
+    "realcugan-pro-x3-conservative",
+    "realcugan-pro-x3-no-denoise-int8",
+    "realcugan-pro-x3-denoise3x-int8",
+    "realcugan-pro-x3-conservative-int8",
+    "span-nomosuni-x2",
+    "span-nomosuni-x2-int8",
+    "w2xex-photo-small-x2",
+    "w2xex-photo-small-x2-int8",
+)
+val qnnContextFiles = qnnSocModels.flatMap { soc -> qnnModelNames.map { model -> "$model.$soc.bin" } }
+val stageQnnContexts = qnnContextRoot?.let { contextRoot ->
+    tasks.register<Sync>("stageQnnContexts") {
+        from(contextRoot) {
+            include(qnnContextFiles)
+            into("qnn-contexts")
+        }
+        into(generatedQnnAssetsDir)
+
+        doFirst {
+            val missingFiles = qnnContextFiles
+                .map(contextRoot::resolve)
+                .filterNot(File::isFile)
+            check(missingFiles.isEmpty()) {
+                "QNN multi-SoC context directory is incomplete: ${missingFiles.joinToString()}"
+            }
+        }
+    }
+}
+// KMK <--
+
 android {
     namespace = "eu.kanade.tachiyomi"
 
@@ -38,6 +129,20 @@ android {
         buildConfigField("boolean", "UPDATER_ENABLED", "${Config.enableUpdater}")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // KMK -->
+        externalNativeBuild {
+            cmake {
+                if (!ncnnSdkDir.isNullOrBlank()) {
+                    arguments += "-DNCNN_SDK_DIR=$ncnnSdkDir"
+                }
+                if (qnnSdkRoot != null) {
+                    arguments += "-DQNN_SDK_DIR=${qnnSdkRoot.absolutePath}"
+                    arguments += "-DQNN_HTP_ARCH=${qnnHtpArchs.first()}"
+                }
+            }
+        }
+        // KMK <--
     }
 
     buildTypes {
@@ -51,6 +156,10 @@ android {
             isShrinkResources = Config.enableCodeShrink
 
             proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
+
+            // KMK --> Sign release with the debug key so `assembleRelease` produces an installable APK.
+            signingConfig = debug.signingConfig
+            // KMK <--
 
             buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = true)}\"")
         }
@@ -102,6 +211,11 @@ android {
     sourceSets {
         getByName("preview").res.srcDirs("src/beta/res")
         getByName("benchmark").res.srcDirs("src/debug/res")
+        // KMK -->
+        if (stageQnnContexts != null) {
+            getByName("main").assets.srcDir(generatedQnnAssetsDir)
+        }
+        // KMK <--
     }
 
     splits {
@@ -115,6 +229,21 @@ android {
 
     packaging {
         jniLibs {
+            // KMK -->
+            // Compress .so files so AGP 8.5.1+ can apply 16 KB page-size alignment
+            // (uncompressed libs from third-party deps are not 16 KB aligned and
+            // trigger the Android 15+ 16 KB compatibility check).
+            useLegacyPackaging = false
+            // KMK <--
+            excludes += listOf(
+                "**/libQnnDsp.so",
+                "**/libQnnDspV66Skel.so",
+                "**/libQnnDspV66Stub.so",
+                "**/libQnnGpu.so",
+                "**/libQnnHtpV68Skel.so",
+                "**/libQnnHtpV68Stub.so",
+            )
+            // KMK <--
             keepDebugSymbols += listOf(
                 "libandroidx.graphics.path",
                 "libarchive-jni",
@@ -157,11 +286,32 @@ android {
         shaders = false
     }
 
+    // KMK -->
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    ndkVersion = "28.2.13676358"
+    // KMK <--
+
     lint {
         abortOnError = false
         checkReleaseBuilds = false
     }
 }
+
+// KMK -->
+if (stageQnnContexts != null) {
+    tasks.configureEach {
+        if (name.startsWith("merge") && name.endsWith("Assets")) {
+            dependsOn(stageQnnContexts)
+        }
+    }
+}
+// KMK <--
 
 kotlin {
     compilerOptions {
@@ -201,6 +351,11 @@ dependencies {
     implementation(projects.presentationCore)
     implementation(projects.presentationWidget)
     implementation(projects.telemetry)
+
+    // KMK -->
+    // Packages the matching HTP Stub/Skel libraries for every supported Snapdragon generation.
+    implementation("com.qualcomm.qti:qnn-runtime:2.49.0")
+    // KMK <--
 
     // Compose
     implementation(compose.activity)

@@ -144,6 +144,62 @@ class ReaderPreferences(
 
     // endregion
 
+    // KMK -->
+    // region Image enhancement (upscale)
+
+    fun realCuganEnabled() = preferenceStore.getBoolean("pref_realcugan_enabled", false)
+
+    fun realCuganNoiseLevel() = preferenceStore.getInt("pref_realcugan_noise_level", 0) // 0: No Denoise, 1: Denoise 1x, 2: Denoise 2x, 3: Denoise 3x, 4: Conservative
+
+    fun realCuganScale() = preferenceStore.getInt("pref_realcugan_scale", 2) // 2x, 3x, 4x
+
+    fun realCuganModel() = preferenceStore.getInt("pref_realcugan_model", 0)
+
+    fun realEsrganStyle() = preferenceStore.getInt("pref_realesrgan_style", 0) // 0: Anime, 1: Photo
+
+    fun realCuganPreloadSize() = preferenceStore.getInt("pref_realcugan_preload_size", 3)
+
+    fun realCuganProEnabled() = preferenceStore.getBoolean("pref_realcugan_pro_enabled", false)
+
+    fun realCuganPerformanceMode() = preferenceStore.getInt("pref_realcugan_performance_mode", 0) // 0: 90%, 1: 50%, 2: 30%
+
+    fun realCuganTileSize() = preferenceStore.getInt("pref_realcugan_tile_size", 128)
+
+    fun realCuganPrecision() = preferenceStore.getInt("pref_realcugan_precision", 0) // 0: FP16, 1: FP32, 2: INT8, 3: BF16
+
+    fun realCuganProcessingBackend() = preferenceStore.getInt("pref_realcugan_processing_backend", 0) // 0: Vulkan, 1: Qualcomm NPU
+
+    fun realCuganFp16Arithmetic() = preferenceStore.getBoolean("pref_realcugan_fp16_arithmetic", false)
+
+    fun realCuganMaxSizeWidth() = preferenceStore.getInt("pref_realcugan_max_size_width", 1600)
+
+    fun realCuganMaxSizeHeight() = preferenceStore.getInt("pref_realcugan_max_size_height", 1600)
+
+    fun realCuganSkipMaxSizeWidth() = preferenceStore.getInt("pref_realcugan_skip_max_size_width", 0)
+
+    fun realCuganSkipMaxSizeHeight() = preferenceStore.getInt("pref_realcugan_skip_max_size_height", 0)
+
+    fun realCuganShowStatus() = preferenceStore.getBoolean("pref_realcugan_show_status", false)
+
+    fun waifu2xEnabled() = preferenceStore.getBoolean("pref_waifu2x_enabled", false)
+
+    fun waifu2xNoiseLevel() = preferenceStore.getInt("pref_waifu2x_noise_level", 2)
+
+    fun anime4kEnabled() = preferenceStore.getBoolean("pref_anime4k_enabled", false)
+
+    fun anime4kMode() = preferenceStore.getInt("pref_anime4k_mode", 0) // 0: Fast, 1: High, 2: Ultra
+
+    fun inkFilter() = preferenceStore.getBoolean("ink_filter", false)
+
+    fun inkBleedingIntensity() = preferenceStore.getInt("ink_bleeding_intensity", 0)
+
+    fun inkBumpIntensity() = preferenceStore.getInt("ink_bump_intensity", 0)
+
+    fun inkOriginalIntensity() = preferenceStore.getInt("ink_original_intensity", 0)
+
+    // endregion
+    // KMK <--
+
     // region Controls
 
     fun readWithLongTap() = preferenceStore.getBoolean("reader_long_tap", true)

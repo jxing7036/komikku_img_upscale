@@ -6,6 +6,8 @@
 
 # Gradle wrapper
 *.jar binary
+*.a binary
+*.bin binary
 
 # Images
 *.webp binary

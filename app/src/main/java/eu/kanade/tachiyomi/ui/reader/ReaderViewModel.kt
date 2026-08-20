@@ -1093,6 +1093,12 @@ class ReaderViewModel @JvmOverloads constructor(
     }
     // SY <--
 
+    // KMK -->
+    fun toggleImageEnhancement(): Boolean {
+        return readerPreferences.realCuganEnabled().toggle()
+    }
+    // KMK <--
+
     /**
      * Generate a filename for the given [manga] and [page]
      */

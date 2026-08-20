@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer
 import mihon.core.archive.archiveReader
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.injectLazy
@@ -70,7 +71,17 @@ internal class DownloadPageLoader(
         }
     }
 
+    // KMK -->
+    private val preferences: eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences by injectLazy()
+    // KMK <--
+
     override suspend fun loadPage(page: ReaderPage) {
         archivePageLoader?.loadPage(page)
+
+        // KMK -->
+        if (preferences.realCuganEnabled().get()) {
+            ImageEnhancer.enhance(context, page)
+        }
+        // KMK <--
     }
 }
