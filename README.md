@@ -1,3 +1,60 @@
+# Komikku Image Upscale (komikku_img_upscale)
+
+> ## 本仓库说明 / About this fork
+>
+> 这是 **[Komikku](https://github.com/komikku-app/komikku)** 的个人定制 fork,在其基础上整合了 **AI 图像超分(upscale)** 能力——把 [mihon_img_upscale](https://github.com/HaoweiLi97/mihon_img_upscale) 的 waifu2x / Real-CUGAN / Real-ESRGAN / W2xEX / SPAN / Anime4K 实时增强引擎移植到了 Komikku。
+>
+> **上游仓库(Upstreams)**
+> - Komikku(本 fork 的基座): <https://github.com/komikku-app/komikku>
+> - mihon_img_upscale(upscale 功能来源): <https://github.com/HaoweiLi97/mihon_img_upscale>
+>
+> **本 fork 相对上游 Komikku 的主要差异**
+> - 新增阅读器内 **AI 图像增强**(waifu2x / Real-CUGAN / Real-ESRGAN 等模型)
+> - 原生引擎: `app/src/main/cpp/` + ncnn Vulkan SDK(`third_party/ncnn-20260113-android-vulkan`)
+> - Kotlin 封装: `app/src/main/java/eu/kanade/tachiyomi/util/waifu2x/` 与 `util/image/`
+> - 阅读器增强设置页、底部可开关的增强按钮、优先级调度(当前页优先、丢弃过期预载)
+> - 已移除高通 NPU(QNN)后端,统一使用 Vulkan GPU
+
+---
+
+## Upscale 移植说明
+
+### 功能来源
+AI 图像增强(upscale)引擎移植自 **mihon_img_upscale**(<https://github.com/HaoweiLi97/mihon_img_upscale>),它本身是基于 Mihon 的 fork,使用 **ncnn** 在移动 GPU(Vulkan)上跑 waifu2x / Real-CUGAN / Real-ESRGAN / W2xEX / SPAN / Anime4K 等超分模型,并针对漫画长图做了分块(tiling)、灰度/Alpha 特判、优先级调度等工程优化。
+
+### 移植方式
+将 mihon_img_upscale 的 upscale 相关部分移植到 Komikku,并按 Komikku 的代码规范接入(`// KMK -->` 标记、`i18n-kmk` 文案)。包含:
+
+1. **原生层**(新增)
+   - `app/src/main/cpp/` — waifu2x.cpp/h、waifu2x_jni.cpp、anime4k.cpp/h、融合 Vulkan shader、CMakeLists
+   - `third_party/ncnn-20260113-android-vulkan/` — ncnn SDK(5 个 ABI)
+2. **模型资产**(新增)
+   - `app/src/main/assets/` — waifu2x / Real-CUGAN / Real-ESRGAN / W2xEX / SPAN / Anime4K 等模型
+3. **Kotlin 封装**(新增)
+   - `util/waifu2x/` — `Waifu2x.kt`(JNI 封装)、`ImageEnhancer.kt`(优先级调度)、`ImageEnhancementCache.kt`(磁盘缓存)
+   - `util/image/ImageFilter.kt` — 墨迹滤镜
+4. **集成点**(修改,均带 `// KMK -->` 标记)
+   - Coil 解码器 `TachiyomiImageDecoder.kt`(enhanced 请求、缓存优先、on-the-fly 增强)
+   - 阅读器管线 `ReaderPageImageView`、`PagerPageHolder`、`Webtoon*`、`HttpPageLoader`/`DownloadPageLoader`、`ReaderActivity`
+   - 设置 `ReaderPreferences`、`ColorFilterPage`、`ReaderBottomButton`(增强按钮可开关)
+   - `i18n-kmk` 文案(`KMR`)
+
+### 构建方法
+```bash
+# 前置:Android SDK + JDK 17;local.properties 配置 sdk.dir
+# ncnn SDK 已随仓库放在 third_party/,无需额外下载
+
+./gradlew spotlessApply
+./gradlew spotlessCheck
+./gradlew assembleRelease   # release 已配置 debug 签名,可直接安装
+```
+
+产物在 `app/build/outputs/apk/release/`:
+- `app-universal-release.apk` — 通用包(含全部 ABI,推荐)
+- `app-arm64-v8a-release.apk` / `app-armeabi-v7a-release.apk` / `app-x86_64-release.apk` / `app-x86-release.apk`
+
+---
+
 <div align="center">
 
 <a href="https://komikku-app.github.io">
