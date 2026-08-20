@@ -95,12 +95,14 @@ class AppUpdateChecker(
 
 val GITHUB_REPO: String by lazy { getGithubRepo() }
 
+// KMK --> Point release checks at this fork's repository.
 fun getGithubRepo(peekIntoPreview: Boolean = false): String =
     if (isPreviewBuildType || peekIntoPreview) {
-        "komikku-app/komikku-preview"
+        "jxing7036/komikku_img_upscale"
     } else {
-        "komikku-app/komikku"
+        "jxing7036/komikku_img_upscale"
     }
+// KMK <--
 
 val RELEASE_TAG: String by lazy { getReleaseTag() }
 

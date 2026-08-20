@@ -249,4 +249,5 @@
     <string name="reader_status_finishing">即将完成…</string>
     <string name="reader_status_enhancing">增强中</string>
     <string name="reader_status_enhancing_progress">增强中… %1$d%%</string>
+    <string name="about_upstreams">上游仓库</string>
 </resources>

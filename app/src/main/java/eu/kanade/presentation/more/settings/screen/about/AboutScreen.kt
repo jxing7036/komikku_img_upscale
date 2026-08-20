@@ -236,6 +236,32 @@ class AboutScreen : Screen() {
                     )
                 }
 
+                // KMK --> Upstream repositories for this fork.
+                item {
+                    TextPreferenceWidget(
+                        title = stringResource(KMR.strings.about_upstreams),
+                    )
+                }
+                item {
+                    TextPreferenceWidget(
+                        title = "Komikku",
+                        subtitle = "github.com/komikku-app/komikku",
+                        onPreferenceClick = {
+                            uriHandler.openUri("https://github.com/komikku-app/komikku")
+                        },
+                    )
+                }
+                item {
+                    TextPreferenceWidget(
+                        title = "mihon_img_upscale",
+                        subtitle = "github.com/HaoweiLi97/mihon_img_upscale",
+                        onPreferenceClick = {
+                            uriHandler.openUri("https://github.com/HaoweiLi97/mihon_img_upscale")
+                        },
+                    )
+                }
+                // KMK <--
+
                 item {
                     TextPreferenceWidget(
                         title = stringResource(MR.strings.licenses),
@@ -285,7 +311,7 @@ class AboutScreen : Screen() {
                         LinkIcon(
                             label = "GitHub",
                             icon = CustomIcons.Github,
-                            url = "https://github.com/komikku-app",
+                            url = "https://github.com/jxing7036/komikku_img_upscale",
                         )
                     }
                 }

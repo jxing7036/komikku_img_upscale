@@ -277,4 +277,5 @@
     <string name="reader_status_finishing">FINISHING...</string>
     <string name="reader_status_enhancing">ENHANCING</string>
     <string name="reader_status_enhancing_progress">ENHANCING... %1$d%%</string>
+    <string name="about_upstreams">Upstream repositories</string>
 </resources>
