@@ -195,12 +195,14 @@ fun ReaderBottomBar(
         }
 
         // KMK -->
-        IconButton(onClick = onClickImageEnhancement) {
-            Icon(
-                painter = painterResource(R.drawable.ic_photo_24dp),
-                contentDescription = stringResource(KMR.strings.reader_image_enhancement),
-                tint = if (imageEnhancementEnabled) iconColor else iconColor.copy(alpha = 0.6f),
-            )
+        if (ReaderBottomButton.ImageEnhancement.isIn(enabledButtons)) {
+            IconButton(onClick = onClickImageEnhancement) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_photo_24dp),
+                    contentDescription = stringResource(KMR.strings.reader_image_enhancement),
+                    tint = if (imageEnhancementEnabled) iconColor else iconColor.copy(alpha = 0.6f),
+                )
+            }
         }
         // KMK <--
         // SY <--

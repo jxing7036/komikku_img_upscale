@@ -156,83 +156,28 @@ internal fun ColorFilterPage(screenModel: ReaderSettingsScreenModel) {
         val realEsrganStyle by screenModel.preferences.realEsrganStyle().collectAsState()
         val realCuganNoiseLevel by screenModel.preferences.realCuganNoiseLevel().collectAsState()
         val realCuganScale by screenModel.preferences.realCuganScale().collectAsState()
-        val processingBackend by screenModel.preferences.realCuganProcessingBackend().collectAsState()
-        val npuDeviceAvailable = remember { Waifu2x.isQualcommNpuAvailable() }
-        val useQualcommNpu = processingBackend == Waifu2x.PROCESSING_BACKEND_QUALCOMM_NPU && npuDeviceAvailable
 
-        LaunchedEffect(npuDeviceAvailable, processingBackend) {
-            if (!npuDeviceAvailable && processingBackend == Waifu2x.PROCESSING_BACKEND_QUALCOMM_NPU) {
-                screenModel.preferences.realCuganProcessingBackend().set(Waifu2x.PROCESSING_BACKEND_VULKAN)
-            }
-        }
-        LaunchedEffect(useQualcommNpu, realCuganModel, realCuganScale) {
-            if (useQualcommNpu) {
-                if (
-                    realCuganModel != 0 &&
-                    realCuganModel != 1 &&
-                    realCuganModel != Waifu2x.MODEL_REAL_ESRGAN_ANIME &&
-                    realCuganModel != Waifu2x.MODEL_W2XEX_PHOTO_SMALL &&
-                    realCuganModel != Waifu2x.MODEL_SPAN_NOMOSUNI_PHOTO
-                ) {
-                    screenModel.preferences.realCuganModel().set(0)
-                }
-                if (
-                    (realCuganModel == 1 && realCuganScale !in 2..3) ||
-                    (realCuganModel != 1 && realCuganScale != 2)
-                ) {
-                    screenModel.preferences.realCuganScale().set(2)
-                }
-            }
-        }
         LaunchedEffect(realCuganModel, realCuganNoiseLevel) {
             if (realCuganModel == 1 && realCuganNoiseLevel !in setOf(0, 3, 4)) {
                 screenModel.preferences.realCuganNoiseLevel().set(3)
             }
         }
 
-        SettingsChipRow(KMR.strings.reader_processing_backend) {
-            FilterChip(
-                selected = processingBackend == Waifu2x.PROCESSING_BACKEND_VULKAN,
-                onClick = {
-                    screenModel.preferences.realCuganProcessingBackend().set(Waifu2x.PROCESSING_BACKEND_VULKAN)
-                },
-                label = { Text(stringResource(KMR.strings.reader_backend_vulkan)) },
-            )
-            FilterChip(
-                selected = useQualcommNpu,
-                onClick = {
-                    screenModel.preferences.realCuganProcessingBackend().set(Waifu2x.PROCESSING_BACKEND_QUALCOMM_NPU)
-                },
-                enabled = npuDeviceAvailable,
-                label = { Text(stringResource(KMR.strings.reader_backend_qualcomm_npu)) },
-            )
-        }
-
         SettingsChipRow(KMR.strings.reader_model) {
-            val models = if (useQualcommNpu) {
-                listOf(
-                    0 to "Real-CUGAN SE",
-                    1 to "Real-CUGAN Pro",
-                    Waifu2x.MODEL_REAL_ESRGAN_ANIME to "Real-ESRGAN",
-                    Waifu2x.MODEL_W2XEX_PHOTO_SMALL to "W2xEX Photo Small",
-                    Waifu2x.MODEL_SPAN_NOMOSUNI_PHOTO to "SPAN NomosUni Photo",
-                )
-            } else {
-                listOf(
-                    0 to "Real-CUGAN SE",
-                    1 to "Real-CUGAN Pro",
-                    Waifu2x.MODEL_REAL_ESRGAN_ANIME to "Real-ESRGAN",
-                    3 to "Real-CUGAN Nose",
-                    4 to "Waifu2x",
-                    5 to "Waifu2x (Fast)",
-                    6 to "W2xEX Universal Fast",
-                    8 to "W2xEX Omni Mini V2",
-                    Waifu2x.MODEL_W2XEX_PHOTO_SMALL to "W2xEX Photo Small",
-                    16 to "AnimeJaNai v2 UltraCompact",
-                    18 to "sudo UltraCompact",
-                    Waifu2x.MODEL_SPAN_NOMOSUNI_PHOTO to "SPAN NomosUni Photo",
-                )
-            }
+            val models = listOf(
+                0 to "Real-CUGAN SE",
+                1 to "Real-CUGAN Pro",
+                Waifu2x.MODEL_REAL_ESRGAN_ANIME to "Real-ESRGAN",
+                3 to "Real-CUGAN Nose",
+                4 to "Waifu2x",
+                5 to "Waifu2x (Fast)",
+                6 to "W2xEX Universal Fast",
+                8 to "W2xEX Omni Mini V2",
+                Waifu2x.MODEL_W2XEX_PHOTO_SMALL to "W2xEX Photo Small",
+                16 to "AnimeJaNai v2 UltraCompact",
+                18 to "sudo UltraCompact",
+                Waifu2x.MODEL_SPAN_NOMOSUNI_PHOTO to "SPAN NomosUni Photo",
+            )
             models.map { (modelId, name) ->
                 FilterChip(
                     selected = realCuganModel == modelId,
@@ -291,7 +236,6 @@ internal fun ColorFilterPage(screenModel: ReaderSettingsScreenModel) {
 
         val fixedW2xExScale = Waifu2x.w2xExScaleFor(realCuganModel)
         if (
-            (useQualcommNpu && realCuganModel != 1) ||
             realCuganModel == 3 || realCuganModel == 4 || realCuganModel == 5 ||
             (realCuganModel == Waifu2x.MODEL_REAL_ESRGAN_ANIME && realEsrganStyle == Waifu2x.REAL_ESRGAN_STYLE_PHOTO) ||
             fixedW2xExScale == 2
@@ -352,51 +296,35 @@ internal fun ColorFilterPage(screenModel: ReaderSettingsScreenModel) {
             }
         }
 
-        if (!useQualcommNpu) {
-            SettingsChipRow(KMR.strings.reader_gpu_performance_mode) {
-                val performanceMode by screenModel.preferences.realCuganPerformanceMode().collectAsState()
-                listOf(
-                    0 to stringResource(KMR.strings.reader_gpu_performance_high),
-                    1 to stringResource(KMR.strings.reader_gpu_performance_balanced),
-                    2 to stringResource(KMR.strings.reader_gpu_performance_power_saving),
-                ).map { (value, name) ->
-                    FilterChip(
-                        selected = performanceMode == value,
-                        onClick = { screenModel.preferences.realCuganPerformanceMode().set(value) },
-                        label = { Text(name) },
-                    )
-                }
+        SettingsChipRow(KMR.strings.reader_gpu_performance_mode) {
+            val performanceMode by screenModel.preferences.realCuganPerformanceMode().collectAsState()
+            listOf(
+                0 to stringResource(KMR.strings.reader_gpu_performance_high),
+                1 to stringResource(KMR.strings.reader_gpu_performance_balanced),
+                2 to stringResource(KMR.strings.reader_gpu_performance_power_saving),
+            ).map { (value, name) ->
+                FilterChip(
+                    selected = performanceMode == value,
+                    onClick = { screenModel.preferences.realCuganPerformanceMode().set(value) },
+                    label = { Text(name) },
+                )
             }
+        }
 
-            SettingsChipRow(KMR.strings.reader_tile_size) {
-                val tileSize by screenModel.preferences.realCuganTileSize().collectAsState()
-                listOf(64, 96, 128, 192, 256).map { value ->
-                    FilterChip(
-                        selected = tileSize == value,
-                        onClick = { screenModel.preferences.realCuganTileSize().set(value) },
-                        label = { Text(value.toString()) },
-                    )
-                }
+        SettingsChipRow(KMR.strings.reader_tile_size) {
+            val tileSize by screenModel.preferences.realCuganTileSize().collectAsState()
+            listOf(64, 96, 128, 192, 256).map { value ->
+                FilterChip(
+                    selected = tileSize == value,
+                    onClick = { screenModel.preferences.realCuganTileSize().set(value) },
+                    label = { Text(value.toString()) },
+                )
             }
         }
 
         val precision by screenModel.preferences.realCuganPrecision().collectAsState()
-        val supportedPrecisions = if (useQualcommNpu) {
-            if (
-                realCuganModel == 0 ||
-                realCuganModel == 1 ||
-                realCuganModel == Waifu2x.MODEL_REAL_ESRGAN_ANIME ||
-                realCuganModel == Waifu2x.MODEL_W2XEX_PHOTO_SMALL ||
-                realCuganModel == Waifu2x.MODEL_SPAN_NOMOSUNI_PHOTO
-            ) {
-                listOf(0, 2)
-            } else {
-                listOf(0)
-            }
-        } else {
-            listOf(0, 1, 2, 3)
-        }
-        LaunchedEffect(useQualcommNpu, realCuganModel, precision) {
+        val supportedPrecisions = listOf(0, 1, 2, 3)
+        LaunchedEffect(realCuganModel, precision) {
             if (precision !in supportedPrecisions) {
                 screenModel.preferences.realCuganPrecision().set(supportedPrecisions.first())
             }
@@ -416,7 +344,7 @@ internal fun ColorFilterPage(screenModel: ReaderSettingsScreenModel) {
             }
         }
 
-        if (!useQualcommNpu && precision == 0) {
+        if (precision == 0) {
             CheckboxItem(
                 label = stringResource(KMR.strings.reader_fp16_arithmetic),
                 pref = screenModel.preferences.realCuganFp16Arithmetic(),
