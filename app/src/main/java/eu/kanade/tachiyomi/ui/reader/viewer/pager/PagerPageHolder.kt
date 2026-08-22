@@ -3,7 +3,14 @@ package eu.kanade.tachiyomi.ui.reader.viewer.pager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.annotation.ColorInt
 import androidx.core.view.isVisible
 import eu.kanade.presentation.util.formattedMessage
@@ -15,6 +22,9 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
+import eu.kanade.tachiyomi.util.waifu2x.ImageEnhancementCache
+import eu.kanade.tachiyomi.util.waifu2x.ImageEnhancer
+import eu.kanade.tachiyomi.util.waifu2x.Waifu2x
 import eu.kanade.tachiyomi.widget.ViewPagerAdapter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
@@ -33,8 +43,10 @@ import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.decoder.ImageDecoder
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
 import kotlin.math.max
 
 /**
@@ -79,6 +91,11 @@ class PagerPageHolder(
      */
     private var extraLoadJob: Job? = null
 
+    /**
+     * Job that keeps the two per-page enhancement status rows up to date in double-page mode.
+     */
+    private var enhancementStatusJob: Job? = null
+
     // KMK -->
     private val readerPreferences by lazy { Injekt.get<ReaderPreferences>() }
     // KMK <--
@@ -106,6 +123,8 @@ class PagerPageHolder(
         loadJob = null
         extraLoadJob?.cancel()
         extraLoadJob = null
+        enhancementStatusJob?.cancel()
+        enhancementStatusJob = null
     }
 
     private fun initProgressIndicator() {
@@ -221,6 +240,7 @@ class PagerPageHolder(
                 }
             }
             withUIContext {
+                setupDoublePageEnhancement()
                 setImage(
                     source,
                     isAnimated,
@@ -250,6 +270,225 @@ class PagerPageHolder(
             withUIContext {
                 setError(e)
             }
+        }
+    }
+
+    private fun setupDoublePageEnhancement() {
+        val second = extraPage
+        val isRealDoublePage =
+            viewer.config.doublePages &&
+                !viewer.config.dualPageSplit &&
+                second != null &&
+                !page.fullPage &&
+                !second.fullPage &&
+                readerPreferences.realCuganEnabled().get()
+        if (!isRealDoublePage) {
+            suppressSinglePageProcessedSwap = false
+            enhancedImageSourceFactory = null
+            suppressDefaultStatus = false
+            hideEnhancementStatus()
+            return
+        }
+        suppressSinglePageProcessedSwap = true
+        enhancedImageSourceFactory = { firstFile ->
+            buildDoublePageSource(firstFile)
+        }
+        // The base view only tracks one page status; in double-page mode we show two rows ourselves.
+        suppressDefaultStatus = true
+        startEnhancementStatusTracking()
+    }
+
+    /**
+     * Builds the merged double-page source from the enhanced cache of both pages. Returns null
+     * until BOTH pages are enhanced, so the merged view is refreshed once, only when both are done.
+     */
+    private fun buildDoublePageSource(firstFile: File): BufferedSource? {
+        val second = extraPage ?: return null
+        val mId = page.chapter.chapter.manga_id ?: -1L
+        val cId = page.chapter.chapter.id ?: -1L
+        if (mId == -1L || cId == -1L) return null
+        if (!readerPreferences.realCuganEnabled().get()) return null
+        ImageEnhancementCache.init(context)
+        val configHash = enhancementConfigHash()
+
+        val secondFile = ImageEnhancementCache.getCachedImage(
+            mId,
+            cId,
+            second.index,
+            configHash,
+            second.enhancementKeySuffix,
+        ) ?: return null
+
+        val bitmap1 = decodeEnhancedBitmap(firstFile) ?: return null
+        val bitmap2 = decodeEnhancedBitmap(secondFile) ?: return null
+        try {
+            val isLTR = (viewer !is R2LPagerViewer) xor viewer.config.invertDoublePages
+            // Scale the center margin by the upscale factor so the physical gap stays constant
+            // before and after enhancement.
+            val rawMargin = calculateCenterMargin(bitmap1.height, bitmap2.height)
+            val effectiveScale = ImageEnhancementCache.getEffectiveScale(
+                model = readerPreferences.realCuganModel().get(),
+                scale = readerPreferences.realCuganScale().get(),
+                realEsrganStyle = readerPreferences.realEsrganStyle().get(),
+            ).coerceAtLeast(1)
+            val centerMargin = (rawMargin * effectiveScale).coerceAtLeast(0)
+            return ImageUtil.mergeBitmaps(bitmap1, bitmap2, isLTR, centerMargin, viewer.config.pageCanvasColor)
+        } finally {
+            bitmap1.recycle()
+            bitmap2.recycle()
+        }
+    }
+
+    private fun enhancementConfigHash(): String {
+        return ImageEnhancementCache.getConfigHash(
+            noise = readerPreferences.realCuganNoiseLevel().get(),
+            scale = readerPreferences.realCuganScale().get(),
+            model = readerPreferences.realCuganModel().get(),
+            realEsrganStyle = readerPreferences.realEsrganStyle().get(),
+            maxWidth = readerPreferences.realCuganMaxSizeWidth().get(),
+            maxHeight = readerPreferences.realCuganMaxSizeHeight().get(),
+            skipMaxWidth = readerPreferences.realCuganSkipMaxSizeWidth().get(),
+            skipMaxHeight = readerPreferences.realCuganSkipMaxSizeHeight().get(),
+            tileSize = readerPreferences.realCuganTileSize().get(),
+            precision = readerPreferences.realCuganPrecision().get(),
+            fp16Arithmetic = readerPreferences.realCuganFp16Arithmetic().get(),
+            processingBackend = readerPreferences.realCuganProcessingBackend().get(),
+        )
+    }
+
+    private fun decodeEnhancedBitmap(file: File): Bitmap? {
+        return try {
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // --- Two-line enhancement status (first page on top, second page below) ---
+
+    private var enhancementStatusContainer: LinearLayout? = null
+    private var enhancementStatusFirst: TextView? = null
+    private var enhancementStatusSecond: TextView? = null
+
+    private fun ensureEnhancementStatusViews(): Pair<TextView, TextView>? {
+        if (enhancementStatusContainer == null) {
+            val container = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                elevation = 20f
+                layoutParams = LayoutParams(
+                    LayoutParams.WRAP_CONTENT,
+                    LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.START,
+                ).apply {
+                    setMargins(20, 0, 0, 20)
+                }
+                addView(makeEnhancementStatusTextView())
+                addView(makeEnhancementStatusTextView())
+            }
+            addView(container)
+            container.bringToFront()
+            enhancementStatusContainer = container
+            enhancementStatusFirst = container.getChildAt(0) as TextView
+            enhancementStatusSecond = container.getChildAt(1) as TextView
+        }
+        val first = enhancementStatusFirst ?: return null
+        val second = enhancementStatusSecond ?: return null
+        return first to second
+    }
+
+    private fun makeEnhancementStatusTextView(): OutlineTextView = OutlineTextView(context).apply {
+        setTextColor(Color.WHITE)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        setBackgroundColor(Color.TRANSPARENT)
+    }
+
+    private fun hideEnhancementStatus() {
+        enhancementStatusJob?.cancel()
+        enhancementStatusJob = null
+        enhancementStatusContainer?.isVisible = false
+    }
+
+    private fun startEnhancementStatusTracking() {
+        enhancementStatusJob?.cancel()
+        val second = extraPage ?: return
+        val mId = page.chapter.chapter.manga_id ?: -1L
+        val cId = page.chapter.chapter.id ?: -1L
+        if (mId == -1L || cId == -1L) return
+        val views = ensureEnhancementStatusViews() ?: return
+        val (firstView, secondView) = views
+        enhancementStatusJob = scope.launch {
+            var attempts = 0
+            // Cancellation is delivered via `delay`, so the loop exits on detach.
+            while (attempts < 240) {
+                val configHash = enhancementConfigHash()
+                val firstStatus = computeEnhancementStatus(mId, cId, page.index, page.enhancementKeySuffix, configHash)
+                val secondStatus = computeEnhancementStatus(mId, cId, second.index, second.enhancementKeySuffix, configHash)
+                withUIContext {
+                    firstView.text = firstStatus
+                    firstView.isVisible = true
+                    secondView.text = secondStatus
+                    secondView.isVisible = true
+                    enhancementStatusContainer?.let {
+                        it.isVisible = true
+                        it.bringToFront()
+                    }
+                }
+                val firstDone = ImageEnhancementCache.getCachedImage(mId, cId, page.index, configHash, page.enhancementKeySuffix) != null ||
+                    ImageEnhancementCache.isSkipped(mId, cId, page.index, configHash, page.enhancementKeySuffix)
+                val secondDone = ImageEnhancementCache.getCachedImage(mId, cId, second.index, configHash, second.enhancementKeySuffix) != null ||
+                    ImageEnhancementCache.isSkipped(mId, cId, second.index, configHash, second.enhancementKeySuffix)
+                if (firstDone && secondDone) {
+                    // Both pages finished: keep showing the final status (no stay delay, no hide).
+                    return@launch
+                }
+                delay(500)
+                attempts++
+            }
+        }
+    }
+
+    private fun computeEnhancementStatus(mId: Long, cId: Long, index: Int, variant: String, configHash: String): String {
+        return when {
+            ImageEnhancementCache.getCachedImage(mId, cId, index, configHash, variant) != null ->
+                context.stringResource(KMR.strings.reader_status_processed)
+            ImageEnhancementCache.isSkipped(mId, cId, index, configHash, variant) ->
+                context.stringResource(KMR.strings.reader_status_raw)
+            Waifu2x.getProgressId() == index -> {
+                val rawProgress = Waifu2x.getProgressPercent()
+                if (rawProgress in 0..100) {
+                    context.stringResource(KMR.strings.reader_status_enhancing_progress, rawProgress)
+                } else {
+                    context.stringResource(KMR.strings.reader_status_enhancing) + ".".repeat(
+                        (rawProgress % 3).let { if (it < 0) -it else it } + 1,
+                    )
+                }
+            }
+            ImageEnhancer.hasRequest(mId, cId, index, variant) ->
+                context.stringResource(KMR.strings.reader_status_queued)
+            else -> context.stringResource(KMR.strings.reader_status_processing)
+        }
+    }
+
+    /**
+     * A simple [TextView] that draws a black outline around its text so the status stays
+     * readable over bright manga pages.
+     */
+    private class OutlineTextView(context: Context) : TextView(context) {
+        private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+            color = Color.BLACK
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            val text = text?.toString().orEmpty()
+            if (text.isNotEmpty()) {
+                outlinePaint.typeface = paint.typeface
+                outlinePaint.textSize = paint.textSize
+                outlinePaint.textAlign = paint.textAlign
+                canvas.drawText(text, compoundPaddingLeft.toFloat(), baseline.toFloat(), outlinePaint)
+            }
+            super.onDraw(canvas)
         }
     }
 
