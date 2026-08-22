@@ -172,6 +172,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
     var readerPage: ReaderPage? = null
     var enhancementVariantOverride: String? = null
     var enhancementStreamOverride: (() -> java.io.InputStream)? = null
+
+    /**
+     * When true (double-page pager merges), only swap in the processed image if the
+     * [enhancedImageSourceFactory] produced a fully merged source; otherwise keep showing the
+     * raw merged double page instead of replacing it with a single enhanced page.
+     */
+    var suppressSinglePageProcessedSwap: Boolean = false
     var processedTransitionStartFraction: Float = 0f
     var processedTransitionEndFraction: Float = 1f
     var controlsCurrentPageSelection: Boolean = true
@@ -553,6 +560,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val uriString = file.toURI().toString()
         updateStatus(context.stringResource(KMR.strings.reader_status_processed))
 
+        if (suppressSinglePageProcessedSwap && transformedSource == null) {
+            // Double-page merge: a single enhanced page must never replace the raw merged view.
+            updateStatus(context.stringResource(KMR.strings.reader_status_processing))
+            return
+        }
+
         if (transformedSource != null) {
             val activeView = pageView as? SubsamplingScaleImageView
             if (activeView != null) {
@@ -818,6 +831,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
                                 withUIContext {
                                     setProcessedSource(cachedFile, transformedSource = transformedSource)
                                 }
+                                return@launchIO
+                            }
+
+                            if (suppressSinglePageProcessedSwap) {
+                                // Double-page merge: keep raw until the merged enhanced source is ready.
+                                startEnhancementPolling(mId, cId, pIdx, configHash, readerPage)
                                 return@launchIO
                             }
 
@@ -1189,6 +1208,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
             val transformedSource = enhancedImageSourceFactory?.invoke(cachedFile)
             if (transformedSource != null) {
                 setProcessedSource(cachedFile, transformedSource = transformedSource)
+            } else if (suppressSinglePageProcessedSwap) {
+                // Double-page merge: keep the raw merged image visible until the merge factory
+                // produces a combined enhanced source (both pages enhanced).
+                viewScope.launchIO {
+                    startEnhancementPolling(mId, cId, pIdx, configHash, originalData, streamFn)
+                }
             } else {
                 val bitmap = decodeEnhancedBitmap(cachedFile)
                 if (bitmap != null) {
@@ -1286,6 +1311,14 @@ open class ReaderPageImageView @JvmOverloads constructor(
                                 setProcessedSource(file, transformedSource = transformedSource)
                             }
                             return@launchIO
+                        }
+
+                        if (suppressSinglePageProcessedSwap) {
+                            // Double-page merge: keep raw merged image until the merge factory
+                            // returns a combined enhanced source. Don't swap in a single page.
+                            delay(500)
+                            attempts++
+                            continue
                         }
 
                         val bitmap = decodeEnhancedBitmap(file)
